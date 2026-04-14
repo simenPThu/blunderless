@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { CheckCircle, XCircle, ChevronRight, RotateCcw, Lightbulb } from "lucide-react";
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
@@ -44,10 +44,15 @@ export default function PuzzlesPage() {
   const [score, setScore] = useState({ correct: 0, wrong: 0 });
   const [hint, setHint] = useState(false);
   const [boardWidth, setBoardWidth] = useState(460);
+  const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   // Bump this to trigger a board re-render after a move
   const [tick, setTick] = useState(0);
 
-  useEffect(() => {
+  function loadSession() {
+    setLoading(true);
+    setPuzzleIndex(0);
+    setScore({ correct: 0, wrong: 0 });
+    setSelectedSquare(null);
     fetch("/api/puzzles")
       .then((res) => res.json())
       .then((data: PuzzleData[]) => {
@@ -55,7 +60,9 @@ export default function PuzzlesPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadSession(); }, []);
 
   const puzzle = puzzles[puzzleIndex];
   const chessRef = useRef<Chess | null>(null);
@@ -85,6 +92,7 @@ export default function PuzzlesPage() {
     setSolutionStep(0);
     setPuzzleState("idle");
     setHint(false);
+    setSelectedSquare(null);
     setTick((t) => t + 1);
   }, [puzzleIndex]);
 
@@ -106,6 +114,7 @@ export default function PuzzlesPage() {
   function onPieceDrop({ sourceSquare, targetSquare }: { piece: unknown; sourceSquare: string; targetSquare: string | null }): boolean {
     const from = sourceSquare;
     const to = targetSquare ?? "";
+    setSelectedSquare(null);
     if (puzzleState === "correct" || puzzleState === "revealed") return false;
     if (!chessRef.current || !puzzle || !to) return false;
 
@@ -154,6 +163,35 @@ export default function PuzzlesPage() {
     return true;
   }
 
+  function onSquareClick({ piece, square }: { piece: { pieceType: string } | null; square: string }) {
+    if (puzzleState === "correct" || puzzleState === "revealed") return;
+    if (!chessRef.current || !puzzle) return;
+    const chess = chessRef.current;
+    const turn = chess.turn(); // 'w' or 'b'
+
+    // If a square is already selected, try click-to-move
+    if (selectedSquare && selectedSquare !== square) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const moves = chess.moves({ square: selectedSquare as any, verbose: true });
+      const isLegal = moves.some((m) => m.to === square);
+      if (isLegal) {
+        onPieceDrop({ piece: null, sourceSquare: selectedSquare, targetSquare: square });
+        return;
+      }
+    }
+
+    // Select the piece if it belongs to the side to move
+    if (piece) {
+      const pieceColor = piece.pieceType[0]; // 'w' or 'b'
+      if (pieceColor === turn) {
+        setSelectedSquare(square === selectedSquare ? null : square);
+        return;
+      }
+    }
+
+    setSelectedSquare(null);
+  }
+
   function resetPuzzle() {
     if (!puzzle) return;
     chessRef.current = new Chess(puzzle.fen);
@@ -161,6 +199,7 @@ export default function PuzzlesPage() {
     setSolutionStep(0);
     setPuzzleState("idle");
     setHint(false);
+    setSelectedSquare(null);
     setTick((t) => t + 1);
   }
 
@@ -189,6 +228,19 @@ export default function PuzzlesPage() {
 
   const tacticalTheme = puzzle?.themes.find((t) => !PHASE_TAGS.has(t));
   const isLastPuzzle = puzzleIndex >= puzzles.length - 1;
+
+  // Compute legal-move dots for the selected square
+  const squareStyles: Record<string, React.CSSProperties> = {};
+  if (selectedSquare && chessRef.current) {
+    squareStyles[selectedSquare] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const moves = chessRef.current.moves({ square: selectedSquare as any, verbose: true });
+    for (const move of moves) {
+      squareStyles[move.to] = {
+        background: "radial-gradient(circle, rgba(0,0,0,0.18) 28%, transparent 28%)",
+      };
+    }
+  }
 
   // suppress the tick lint warning — it's purely a render trigger
   void tick;
@@ -252,9 +304,11 @@ export default function PuzzlesPage() {
                 options={{
                   position: boardPosition,
                   onPieceDrop: onPieceDrop,
+                  onSquareClick: onSquareClick,
                   boardOrientation: sideToMove,
                   allowDragging: puzzleState !== "correct" && puzzleState !== "revealed",
                   boardStyle: { borderRadius: 0 },
+                  squareStyles,
                 }}
               />
             </div>
@@ -382,9 +436,12 @@ export default function PuzzlesPage() {
             {isLastPuzzle && puzzleState === "correct" && (
               <Card className="p-5 border-amber-200 bg-amber-50 text-center">
                 <p className="font-bold text-amber-800 text-lg mb-1">Session complete!</p>
-                <p className="text-sm text-amber-700">
+                <p className="text-sm text-amber-700 mb-4">
                   {score.correct} correct, {score.wrong} wrong.
                 </p>
+                <Button onClick={loadSession} className="w-full">
+                  New session <ChevronRight className="w-4 h-4" />
+                </Button>
               </Card>
             )}
           </div>
