@@ -144,12 +144,13 @@ export default function AnalysisPage() {
               </div>
 
               {/* Board */}
-              <div className="rounded-xl overflow-hidden shadow-sm border border-stone-200">
+              <div className="rounded-xl overflow-hidden shadow-sm border border-stone-200" style={{ width: boardWidth, height: boardWidth }}>
                 <Chessboard
-                  position={currentFen.split(" ")[0] ?? currentFen}
-                  boardWidth={boardWidth}
-                  arePiecesDraggable={false}
-                  customBoardStyle={{ borderRadius: 0 }}
+                  options={{
+                    position: currentFen.split(" ")[0] ?? currentFen,
+                    allowDragging: false,
+                    boardStyle: { borderRadius: 0 },
+                  }}
                 />
               </div>
 

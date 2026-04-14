@@ -17,48 +17,6 @@ interface PuzzleData {
   blunderedMove?: string;
 }
 
-const PUZZLES: PuzzleData[] = [
-  {
-    id: "p1",
-    source: "lichess",
-    fen: "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1",
-    solution: ["e1e8"],
-    themes: ["backRankMate", "mateIn1"],
-    rating: 1150,
-  },
-  {
-    id: "p2",
-    source: "lichess",
-    fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4",
-    solution: ["h5f7"],
-    themes: ["scholarsMate", "mateIn1"],
-    rating: 1000,
-  },
-  {
-    id: "p3",
-    source: "lichess",
-    fen: "r3k3/8/8/3N4/8/8/8/4K3 w - - 0 1",
-    solution: ["d5c7"],
-    themes: ["fork", "knightEndgame"],
-    rating: 1300,
-  },
-  {
-    id: "p4",
-    source: "lichess",
-    fen: "5rk1/pp4pp/2p5/2b1P3/4p3/1PB1K1P1/P4P1P/R7 b - - 0 1",
-    solution: ["c5f2"],
-    themes: ["pin", "middlegame"],
-    rating: 1250,
-  },
-  {
-    id: "p5",
-    source: "lichess",
-    fen: "r2qkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2NBPN2/PP3PPP/R1BQK2R w KQkq - 0 1",
-    solution: ["d1b3"],
-    themes: ["fork", "queenside"],
-    rating: 1200,
-  },
-];
 
 // Phase/length tags that are not useful as tactical hints
 const PHASE_TAGS = new Set([
@@ -78,6 +36,8 @@ function uciToMove(uci: string) {
 }
 
 export default function PuzzlesPage() {
+  const [puzzles, setPuzzles] = useState<PuzzleData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [solutionStep, setSolutionStep] = useState(0);
   const [puzzleState, setPuzzleState] = useState<PuzzleState>("idle");
@@ -87,20 +47,30 @@ export default function PuzzlesPage() {
   // Bump this to trigger a board re-render after a move
   const [tick, setTick] = useState(0);
 
-  const puzzle = PUZZLES[puzzleIndex]!;
+  useEffect(() => {
+    fetch("/api/puzzles")
+      .then((res) => res.json())
+      .then((data: PuzzleData[]) => {
+        setPuzzles(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const puzzle = puzzles[puzzleIndex];
   const chessRef = useRef<Chess | null>(null);
 
   // (Re-)initialise the chess instance whenever the puzzle changes.
   // We do this synchronously in render so chessRef is always consistent.
   const lastPuzzleId = useRef<string>("");
-  if (lastPuzzleId.current !== puzzle.id) {
+  if (puzzle && lastPuzzleId.current !== puzzle.id) {
     lastPuzzleId.current = puzzle.id;
     chessRef.current = new Chess(puzzle.fen);
   }
 
   // Board position derived directly from the chess instance — never stale
   const boardPosition = (chessRef.current ?? new Chess()).fen().split(" ")[0]!;
-  const sideToMove = puzzle.fen.split(" ")[1] === "b" ? "black" : "white";
+  const sideToMove = puzzle?.fen.split(" ")[1] === "b" ? "black" : "white";
 
   // Board width — responsive
   useEffect(() => {
@@ -119,7 +89,7 @@ export default function PuzzlesPage() {
   }, [puzzleIndex]);
 
   const playOpponentMove = useCallback((step: number) => {
-    const uci = PUZZLES[puzzleIndex]?.solution[step];
+    const uci = puzzles[puzzleIndex]?.solution[step];
     if (!uci || !chessRef.current) return;
     setTimeout(() => {
       try {
@@ -131,11 +101,13 @@ export default function PuzzlesPage() {
         /* illegal — skip */
       }
     }, 600);
-  }, [puzzleIndex]);
+  }, [puzzleIndex, puzzles]);
 
-  function onPieceDrop(from: string, to: string): boolean {
+  function onPieceDrop({ sourceSquare, targetSquare }: { piece: unknown; sourceSquare: string; targetSquare: string | null }): boolean {
+    const from = sourceSquare;
+    const to = targetSquare ?? "";
     if (puzzleState === "correct" || puzzleState === "revealed") return false;
-    if (!chessRef.current) return false;
+    if (!chessRef.current || !puzzle || !to) return false;
 
     const expected = puzzle.solution[solutionStep];
     if (!expected) return false;
@@ -183,6 +155,7 @@ export default function PuzzlesPage() {
   }
 
   function resetPuzzle() {
+    if (!puzzle) return;
     chessRef.current = new Chess(puzzle.fen);
     lastPuzzleId.current = puzzle.id; // keep the id in sync
     setSolutionStep(0);
@@ -192,7 +165,7 @@ export default function PuzzlesPage() {
   }
 
   function revealSolution() {
-    if (!chessRef.current) return;
+    if (!chessRef.current || !puzzle) return;
     setPuzzleState("revealed");
     chessRef.current = new Chess(puzzle.fen);
     setTick((t) => t + 1);
@@ -209,16 +182,42 @@ export default function PuzzlesPage() {
   }
 
   function nextPuzzle() {
-    if (puzzleIndex < PUZZLES.length - 1) {
+    if (puzzleIndex < puzzles.length - 1) {
       setPuzzleIndex((i) => i + 1);
     }
   }
 
-  const tacticalTheme = puzzle.themes.find((t) => !PHASE_TAGS.has(t));
-  const isLastPuzzle = puzzleIndex >= PUZZLES.length - 1;
+  const tacticalTheme = puzzle?.themes.find((t) => !PHASE_TAGS.has(t));
+  const isLastPuzzle = puzzleIndex >= puzzles.length - 1;
 
   // suppress the tick lint warning — it's purely a render trigger
   void tick;
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <Breadcrumb items={[{ label: "Puzzles" }]} />
+          <div className="flex items-center justify-center h-64 text-stone-500">
+            Loading puzzles…
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!puzzle) {
+    return (
+      <AppShell>
+        <div className="max-w-5xl mx-auto px-6 py-8">
+          <Breadcrumb items={[{ label: "Puzzles" }]} />
+          <div className="flex items-center justify-center h-64 text-stone-500">
+            No puzzles available. Try again later.
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -241,21 +240,22 @@ export default function PuzzlesPage() {
               <span className="font-semibold text-stone-900">{score.wrong}</span>
             </span>
             <span className="text-stone-300">|</span>
-            <span className="text-stone-500">{puzzleIndex + 1} / {PUZZLES.length}</span>
+            <span className="text-stone-500">{puzzleIndex + 1} / {puzzles.length}</span>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-[auto_1fr] gap-6 items-start">
           {/* Board */}
           <div className="flex flex-col gap-3">
-            <div className="rounded-xl overflow-hidden shadow-sm border border-stone-200">
+            <div className="rounded-xl overflow-hidden shadow-sm border border-stone-200" style={{ width: boardWidth, height: boardWidth }}>
               <Chessboard
-                position={boardPosition}
-                onPieceDrop={onPieceDrop}
-                boardOrientation={sideToMove}
-                boardWidth={boardWidth}
-                arePiecesDraggable={puzzleState !== "correct" && puzzleState !== "revealed"}
-                customBoardStyle={{ borderRadius: 0 }}
+                options={{
+                  position: boardPosition,
+                  onPieceDrop: onPieceDrop,
+                  boardOrientation: sideToMove,
+                  allowDragging: puzzleState !== "correct" && puzzleState !== "revealed",
+                  boardStyle: { borderRadius: 0 },
+                }}
               />
             </div>
 

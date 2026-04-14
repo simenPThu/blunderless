@@ -186,7 +186,7 @@ export default function DashboardPage() {
                   <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: "#78716c" }} tickLine={false} axisLine={false} />
                   <Tooltip
                     contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => [`${v}%`, "Accuracy"]}
+                    formatter={(v) => [`${v}%`, "Accuracy"]}
                   />
                   <Area type="monotone" dataKey="accuracy" stroke="#f59e0b" strokeWidth={2} fill="url(#accuracyGrad)" dot={false} />
                 </AreaChart>

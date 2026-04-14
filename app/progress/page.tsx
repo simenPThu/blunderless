@@ -157,7 +157,7 @@ export default function ProgressPage() {
                   <YAxis domain={[50, 100]}  tick={{ fontSize: 11, fill: "#78716c" }} tickLine={false} axisLine={false} />
                   <Tooltip
                     contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => [`${v}%`, "Accuracy"]}
+                    formatter={(v) => [`${v}%`, "Accuracy"]}
                   />
                   <Area type="monotone" dataKey="accuracy" stroke="#f59e0b" strokeWidth={2} fill="url(#accGrad)" dot={{ fill: "#f59e0b", r: 3 }} />
                 </AreaChart>
@@ -181,7 +181,7 @@ export default function ProgressPage() {
                   <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#78716c" }} tickLine={false} axisLine={false} />
                   <Tooltip
                     contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => [v, "Rating"]}
+                    formatter={(v) => [v, "Rating"]}
                   />
                   <Area type="monotone" dataKey="rating" stroke="#22c55e" strokeWidth={2} fill="url(#ratingGrad)" dot={{ fill: "#22c55e", r: 3 }} />
                 </AreaChart>
@@ -209,7 +209,7 @@ export default function ProgressPage() {
                     <YAxis tick={{ fontSize: 10, fill: "#78716c" }} tickLine={false} axisLine={false} />
                     <Tooltip
                       contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 8, fontSize: 12 }}
-                      formatter={(v: number) => [v, "moves"]}
+                      formatter={(v) => [v, "moves"]}
                     />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                       {(Object.keys(d.classBreakdown) as MoveClassification[]).map((c) => (

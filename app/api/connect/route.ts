@@ -30,10 +30,33 @@ export async function POST(req: NextRequest) {
       };
 
       const canonicalUsername = data.username ?? trimmedUsername;
+
+      // Fetch rating from Chess.com stats endpoint
+      let rating = 1500;
+      try {
+        const statsRes = await fetch(
+          `https://api.chess.com/pub/player/${encodeURIComponent(canonicalUsername)}/stats`,
+          { headers: { "User-Agent": "BlunderLess/1.0 chess-improvement-app" } }
+        );
+        if (statsRes.ok) {
+          const stats = await statsRes.json() as {
+            chess_rapid?: { last?: { rating?: number } };
+            chess_blitz?: { last?: { rating?: number } };
+            chess_bullet?: { last?: { rating?: number } };
+          };
+          rating =
+            stats.chess_rapid?.last?.rating ??
+            stats.chess_blitz?.last?.rating ??
+            stats.chess_bullet?.last?.rating ??
+            1500;
+        }
+      } catch { /* use default rating */ }
+
       const response = NextResponse.json({
         ok: true,
         platform: "chess.com",
         username: canonicalUsername,
+        rating,
       });
 
       // Store platform + username in a regular cookie (public info, readable by server)
@@ -44,6 +67,12 @@ export async function POST(req: NextRequest) {
         maxAge: 60 * 60 * 24 * 30, // 30 days
       });
       response.cookies.set("bl_username", canonicalUsername, {
+        httpOnly: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+      response.cookies.set("bl_rating", String(rating), {
         httpOnly: false,
         sameSite: "lax",
         path: "/",
@@ -78,7 +107,7 @@ export async function POST(req: NextRequest) {
         data.perfs?.rapid?.rating ??
         data.perfs?.blitz?.rating ??
         data.perfs?.bullet?.rating ??
-        0;
+        1500;
 
       const response = NextResponse.json({
         ok: true,
@@ -94,6 +123,12 @@ export async function POST(req: NextRequest) {
         maxAge: 60 * 60 * 24 * 30,
       });
       response.cookies.set("bl_username", canonicalUsername, {
+        httpOnly: false,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      });
+      response.cookies.set("bl_rating", String(rating), {
         httpOnly: false,
         sameSite: "lax",
         path: "/",

@@ -1,17 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { fetchLichessPuzzles } from "@/lib/puzzles/lichess";
 
-interface LichessDailyResponse {
-  puzzle: {
-    id: string;
-    rating: number;
-    solution: string[];
-    themes: string[];
-    fen: string;
-  };
-}
-
-// Verified static fallback puzzles — always returned even if Lichess is unreachable.
-// FENs and solutions confirmed valid with chess.js.
+// Fallback puzzles used when the Lichess API is unreachable.
 const STATIC_PUZZLES = [
   {
     id: "static-1",
@@ -39,29 +29,24 @@ const STATIC_PUZZLES = [
   },
 ];
 
-export async function GET() {
-  // Try to fetch today's real Lichess puzzle (no auth required)
+function themesForRating(rating: number): string[] {
+  if (rating < 1000) return ["mateIn1", "backRankMate", "mateIn2"];
+  if (rating < 1400) return ["fork", "pin", "skewer", "mateIn1", "mateIn2"];
+  if (rating < 1800) return ["fork", "pin", "skewer", "discoveredAttack", "sacrifice", "deflection"];
+  return ["zugzwang", "quietMove", "defensiveMove", "interference", "clearance"];
+}
+
+export async function GET(req: NextRequest) {
+  const cookies = req.cookies;
+  const rating = parseInt(cookies.get("bl_rating")?.value ?? "1500", 10);
+  const token = cookies.get("bl_lichess_token")?.value;
+
+  const themes = themesForRating(isNaN(rating) ? 1500 : rating);
+
   try {
-    const res = await fetch("https://lichess.org/api/puzzle/daily", {
-      headers: { Accept: "application/json" },
-      next: { revalidate: 3600 }, // cache for 1 hour
-    });
-
-    if (res.ok) {
-      const data = await res.json() as LichessDailyResponse;
-      const { puzzle } = data;
-
-      // Map to our format and prepend to static puzzles
-      const daily = {
-        id: puzzle.id,
-        source: "lichess" as const,
-        fen: puzzle.fen,
-        solution: puzzle.solution,
-        themes: puzzle.themes,
-        rating: puzzle.rating,
-      };
-
-      return NextResponse.json([daily, ...STATIC_PUZZLES]);
+    const puzzles = await fetchLichessPuzzles(themes, 10, token ? { token } : undefined);
+    if (puzzles.length > 0) {
+      return NextResponse.json(puzzles);
     }
   } catch {
     // Lichess unreachable — fall through to static puzzles
