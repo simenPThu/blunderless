@@ -53,13 +53,13 @@ export default function PuzzlesPage() {
     setPuzzleIndex(0);
     setScore({ correct: 0, wrong: 0 });
     setSelectedSquare(null);
-    fetch("/api/puzzles")
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    fetch("/api/puzzles", { signal: controller.signal })
       .then((res) => res.json())
-      .then((data: PuzzleData[]) => {
-        setPuzzles(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      .then((data: PuzzleData[]) => { setPuzzles(data); setLoading(false); })
+      .catch(() => setLoading(false))
+      .finally(() => clearTimeout(timeoutId));
   }
 
   useEffect(() => { loadSession(); }, []);
@@ -229,16 +229,25 @@ const moves = chess.moves({ square: selectedSquare as any, verbose: true });
   const tacticalTheme = puzzle?.themes.find((t) => !PHASE_TAGS.has(t));
   const isLastPuzzle = puzzleIndex >= puzzles.length - 1;
 
-  // Compute legal-move dots for the selected square
+  // Compute legal-move dots for the selected square.
+  // Empty squares get a filled dot; capture squares get a ring around the piece.
   const squareStyles: Record<string, React.CSSProperties> = {};
   if (selectedSquare && chessRef.current) {
     squareStyles[selectedSquare] = { backgroundColor: "rgba(255, 255, 0, 0.4)" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const moves = chessRef.current.moves({ square: selectedSquare as any, verbose: true });
     for (const move of moves) {
-      squareStyles[move.to] = {
-        background: "radial-gradient(circle, rgba(0,0,0,0.18) 28%, transparent 28%)",
-      };
+      if ((move as { captured?: string }).captured) {
+        // Capture square: dark ring around the existing piece
+        squareStyles[move.to] = {
+          background: "radial-gradient(circle, transparent 56%, rgba(0,0,0,0.5) 56%, rgba(0,0,0,0.5) 72%, transparent 72%)",
+        };
+      } else {
+        // Empty square: dark filled dot in the center
+        squareStyles[move.to] = {
+          background: "radial-gradient(circle, rgba(0,0,0,0.45) 30%, transparent 30%)",
+        };
+      }
     }
   }
 
